@@ -1,0 +1,108 @@
+
+[
+  {
+    "entrada": "ASPIRADOR DE SECRECIONES",
+    "transformacion": "ASPIRADOR",
+    "codigo": "ASPI01"
+  },
+  {
+    "entrada": "MONITOR DE SIGNOS VITALES",
+    "transformacion": "QUITAR",
+    "codigo": null
+  },
+  {
+    "entrada": "PULSIOXIMETRO DE LECTURA CONTINUA",
+    "transformacion": "PULSOXIMETRO",
+    "codigo": "PUL01"
+  },
+  {
+    "entrada": "VENTILADOR MECANICO",
+    "transformacion": "EQUIPO DE VENTILACION",
+    "codigo": "VENT"
+  },
+  {
+    "entrada": "BOMBA DE ALIMENTACION",
+    "transformacion": "BOMBA DE ALIMENTACION EPUMP",
+    "codigo": "BALMI01"
+  },
+  {
+    "entrada": "NEBULIZADOR",
+    "transformacion": "NEBULIZADOR",
+    "codigo": "NEB01"
+  },
+  {
+    "entrada": "FONENDOSCOPIO",
+    "transformacion": "QUITAR",
+    "codigo": null
+  },
+  {
+    "entrada": "TENSIOMETRO",
+    "transformacion": "QUITAR",
+    "codigo": null
+  },
+  {
+    "entrada": "PULSIOXIMETRO",
+    "transformacion": "PULSOXIMETRO",
+    "codigo": "PUL01"
+  },
+  {
+    "entrada": "FONENDOSCOPIO PEDIATRICO",
+    "transformacion": "QUITAR",
+    "codigo": null
+  },
+  {
+    "entrada": "CAMA HOSPITALARIA 2 NIVELES",
+    "transformacion": "CAMA HOSPITALARIA_2 NIVELES",
+    "codigo": "CAM02"
+  },
+  {
+    "entrada": "CAMA HOSPITALARIA 3 NIVELES",
+    "transformacion": "CAMA HOSPITALARIA_3 NIVELES",
+    "codigo": "CAM03"
+  },
+  {
+    "entrada": "ATRIL",
+    "transformacion": "ATRIL",
+    "codigo": "ATR01"
+  },
+  {
+    "entrada": "CAMA ELECTRICA 3 NIVELES",
+    "transformacion": "CAMA HOSPITALARIA_ELECTRICA 3 NIVELES",
+    "codigo": "CAME03"
+  },
+  {
+    "entrada": "BATERIA DE SOPORTE",
+    "transformacion": "QUITAR",
+    "codigo": null
+  },
+  {
+    "entrada": "TENSIOMETRO PEDIATRICO",
+    "transformacion": "QUITAR",
+    "codigo": null
+  },
+  {
+    "entrada": "UPS",
+    "transformacion": "QUITAR",
+    "codigo": null
+  },
+  {
+    "entrada": "ASPIRADOR DE SECRECIONES PORTATIL",
+    "transformacion": "ASPIRADOR",
+    "codigo": "ASPI01"
+  },
+  {
+    "entrada": "PULSIOXIMETRO PEDIATRICO",
+    "transformacion": "PULSOXIMETRO",
+    "codigo": "PUL01"
+  },
+  {
+    "entrada": "BOMBA DE INFUSION",
+    "transformacion": "BOMBA DE INFUSION",
+    "codigo": "BOMINF01"
+  },
+  {
+    "entrada": "TOMA DE MUESTRA",
+    "transformacion": "TOMA DE MUESTRA",
+    "codigo": "908711"
+  }
+]
