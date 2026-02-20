@@ -2,8 +2,12 @@
 venv/
 __pycache__/
 
+
+Codigo V1/*
 worker/
 zip/*.zip
 Activos/*.xlsx
+Laboratorio/*.xlsx
 
-
+auditoria_activos*.csv
+RIPS COMFE_PLANTILLA*.xlsx
