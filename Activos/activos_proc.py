@@ -128,39 +128,27 @@ def leer_activos_xlsx(xlsx_path: Path, sheet_name: str = "DETALLADO") -> list[Ac
     ws = wb[sheet_name]
 
     rows: list[ActivoRow] = []
-    # Columnas según tu archivo:
-    # C=3 Tipo doc paciente, D=4 Documento, I=9 Nombre servicio
+    
+    # Columnas según el nuevo archivo:
+    # B=2 NO DOC (Documento), E=5 DESCRIPCIÓN (Nombre servicio)
     for r in range(2, ws.max_row + 1):
-        tipo = ws.cell(r, 3).value
-        doc = ws.cell(r, 4).value
-        serv = ws.cell(r, 9).value
+        doc = ws.cell(r, 2).value
+        serv = ws.cell(r, 5).value
 
-        tipo_s = (str(tipo).strip() if tipo is not None else "")
         doc_s = (str(doc).strip() if doc is not None else "")
         doc_n = norm_doc(doc_s)
 
         serv_s = (str(serv).strip() if serv is not None else "")
         serv_n = norm_servicio(serv_s)
 
-        if not tipo_s and not doc_s and not serv_s:
+        if not doc_s and not serv_s:
             continue  # fila vacía
-        if not tipo_s or not doc_n or not serv_n:
-            rows.append(
-                ActivoRow(
-                    rownum=r,
-                    tipo_doc=tipo_s,
-                    doc_raw=doc_s,
-                    doc_norm=doc_n,
-                    servicio_raw=serv_s,
-                    servicio_norm=serv_n,
-                )
-            )
-            continue
-
+            
+        # El tipo_doc se inicializa vacío, se buscará en construir_plan_activos
         rows.append(
             ActivoRow(
                 rownum=r,
-                tipo_doc=tipo_s,
+                tipo_doc="", 
                 doc_raw=doc_s,
                 doc_norm=doc_n,
                 servicio_raw=serv_s,
@@ -178,6 +166,13 @@ def construir_plan_activos(excel, activos: list[ActivoRow], mapeo: dict, fecha: 
     """
     # 1) Index US (A tipo, B doc)
     us_keys = excel.cargar_us_keyset()
+    
+    # NUEVO: Crear diccionario para deducir el "Tipo de Documento" a partir del "Número"
+    doc_to_tipo = {}
+    for key in us_keys:
+        partes = key.split("|")
+        if len(partes) == 2:
+            doc_to_tipo[partes[1]] = partes[0]
 
     # 2) Base ESTRUCTURA (E doc -> L y M primera ocurrencia)
     base_map = excel.cargar_estructura_base_lm()
@@ -203,17 +198,20 @@ def construir_plan_activos(excel, activos: list[ActivoRow], mapeo: dict, fecha: 
         )
 
     for a in activos:
-        if not a.tipo_doc or not a.doc_norm:
-            reject(a, "DOC_O_TIPO_VACIO")
+        if not a.doc_norm:
+            reject(a, "DOC_VACIO")
             continue
         if not a.servicio_norm:
             reject(a, "SERVICIO_VACIO")
             continue
 
-        key_us = f"{a.tipo_doc}|{a.doc_norm}"
-        if key_us not in us_keys:
+        # Cruce y asignación automática del Tipo de Documento
+        tipo_encontrado = doc_to_tipo.get(a.doc_norm)
+        if not tipo_encontrado:
             reject(a, "NO_EXISTE_EN_US")
             continue
+            
+        a.tipo_doc = tipo_encontrado # Si existe, le asignamos el Tipo (Ej: 'CC')
 
         m = mapeo.get(a.servicio_norm)
         if not m:
@@ -279,3 +277,42 @@ def exportar_auditoria_csv(out_path: Path, plan: list[PlanRow], descartes: list[
             w.writerow(["OK", p.tipo_doc, p.doc_norm, p.fecha.isoformat(), p.codigo, p.nombre_homologado, p.l_base, p.m_base, p.base_row, p.servicio_raw, "", "", ""])
         for d in descartes:
             w.writerow(["NO", d.get("tipo_doc",""), d.get("doc_norm",""), "", "", "", "", "", "", d.get("servicio",""), d.get("reason",""), d.get("extra",""), d.get("row_excel","")])
+
+# -------------------------
+    # ESCRITURA: Activos en ESTRUCTURA (D..M)
+    # -------------------------
+    def pegar_activos_estructura(self, plan_rows, fila_inicio):
+        """
+        Inserta nuevas filas para Activos escribiendo D..M (10 columnas).
+        Mapeo:
+          D = tipo_doc
+          E = doc
+          F = fecha
+          H = codigo
+          K = nombre homologado
+          L = L_base
+          M = M_base
+        """
+        if not plan_rows:
+            return fila_inicio
+
+        data = []
+        for p in plan_rows:
+            row = [""] * 10  # D..M
+            row[0] = p.tipo_doc            # D
+            row[1] = p.doc_norm            # E
+            
+            # SOLUCIÓN: Convertir la fecha a texto (DD/MM/YYYY) para evitar el error de pywin32
+            row[2] = p.fecha.strftime("%d/%m/%Y")  # F
+            
+            row[4] = p.codigo              # H
+            row[7] = p.nombre_homologado   # K
+            row[8] = p.l_base              # L
+            row[9] = p.m_base              # M
+            data.append(row)
+
+        start = fila_inicio
+        end = fila_inicio + len(data) - 1
+
+        self.ws_estructura.Range(f"D{start}:M{end}").Value = data
+        return end + 1

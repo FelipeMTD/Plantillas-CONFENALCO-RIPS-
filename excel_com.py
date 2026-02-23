@@ -312,7 +312,10 @@ class ExcelCOM:
             row = [""] * 10  # D..M
             row[0] = p.tipo_doc            # D
             row[1] = p.doc_norm            # E
-            row[2] = p.fecha               # F (date)
+            
+          
+            row[2] = p.fecha.strftime("%Y-%m-%d")
+            
             row[4] = p.codigo              # H
             row[7] = p.nombre_homologado   # K
             row[8] = p.l_base              # L
