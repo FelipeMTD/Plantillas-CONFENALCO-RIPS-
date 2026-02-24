@@ -3,8 +3,8 @@ import shutil
 
 def resetear_plantilla():
     # Definición de rutas
-    ruta_maestra = r"C:\Users\FELIPE SISTEMAS\Documents\RIPS\RIPS COMFE_PLANTILLA.xlsm"
-    ruta_destino = r"C:\Users\FELIPE SISTEMAS\Documents\RIPS\CODIGO\RIPS COMFE_PLANTILLA.xlsm"
+    ruta_maestra = r"C:\Users\FELIPE SISTEMAS\Documents\RIPS\RIPS_COMFE_PLANTILL_ORIGINAL.xlsm"
+    ruta_destino = r"C:\Users\FELIPE SISTEMAS\Documents\RIPS\CODIGO\RIPS_COMFE_PLANTILLA.xlsm"
 
     try:
         # 1. Borrar el archivo en el destino si existe

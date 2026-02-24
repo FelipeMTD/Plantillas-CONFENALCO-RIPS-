@@ -1,318 +1,71 @@
 # activos_proc.py
 from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
-from datetime import datetime, date, timedelta
-import csv
-import json
-import re
-import unicodedata
-
-import openpyxl
-
-from excel_com import norm_doc  # reutilizamos tu normalización de documento
-
-
-_re_spaces = re.compile(r"\s+")
-
-
-def _strip_accents(s: str) -> str:
-    return "".join(
-        ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch)
-    )
-
+from datetime import datetime, date
+import csv, json, re, unicodedata, openpyxl
+from excel_com import norm_doc
 
 def norm_servicio(s) -> str:
-    if s is None:
-        return ""
-    s = str(s)
-    s = _strip_accents(s)
-    s = s.upper().strip()
-    s = _re_spaces.sub(" ", s)
-    return s
-
+    if s is None: return ""
+    s = "".join(ch for ch in unicodedata.normalize("NFKD", str(s)) if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", s).upper().strip()
 
 def parse_fecha_usuario(s: str) -> date:
-    s = (s or "").strip()
-    if not s:
-        raise ValueError("Fecha vacía")
-
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except ValueError:
-            pass
-
-    raise ValueError("Formato inválido. Usa YYYY-MM-DD o DD/MM/YYYY")
-
-
-def norm_fecha_key(v) -> str:
-    """
-    Normaliza fechas desde Excel COM para dedupe.
-    """
-    if v is None or v == "":
-        return ""
-    if isinstance(v, datetime):
-        return v.date().isoformat()
-    if isinstance(v, date):
-        return v.isoformat()
-
-    # Excel serial (a veces COM devuelve float)
-    if isinstance(v, (int, float)):
-        base = datetime(1899, 12, 30)
-        try:
-            d = (base + timedelta(days=float(v))).date()
-            return d.isoformat()
-        except Exception:
-            return str(v).strip()
-
-    s = str(v).strip()
-    if not s:
-        return ""
-    # intenta parsear algunos formatos comunes
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
-        try:
-            return datetime.strptime(s, fmt).date().isoformat()
-        except ValueError:
-            pass
-    return s
-
+        try: return datetime.strptime(s, fmt).date()
+        except ValueError: pass
+    raise ValueError("Formato inválido. Use YYYY-MM-DD o DD/MM/YYYY")
 
 @dataclass
 class ActivoRow:
-    rownum: int
-    tipo_doc: str
-    doc_raw: str
-    doc_norm: str
-    servicio_raw: str
-    servicio_norm: str
-
+    rownum: int; tipo_doc: str; doc_raw: str; doc_norm: str; servicio_raw: str; servicio_norm: str
 
 @dataclass
 class PlanRow:
-    tipo_doc: str
-    doc_norm: str
-    fecha: date
-    codigo: str               # va a H
-    nombre_homologado: str    # va a K
-    l_base: str               # va a L
-    m_base: str               # va a M
-    base_row: int             # fila base donde se extrajo L/M
-    servicio_raw: str         # auditoría
+    tipo_doc: str; doc_norm: str; fecha: date; codigo: str; nombre_homologado: str; l_base: str; m_base: str; base_row: int; servicio_raw: str
 
-
-def cargar_mapeo_activos(json_path: Path) -> dict[str, dict]:
-    """
-    Devuelve dict: entrada_norm -> {transformacion, codigo, entrada}
-    """
-    data = json.loads(json_path.read_text(encoding="utf-8"))
-    out = {}
-    for item in data:
-        entrada = item.get("entrada", "")
-        entrada_norm = norm_servicio(entrada)
-        if not entrada_norm:
-            continue
-        out[entrada_norm] = {
-            "entrada": entrada,
-            "transformacion": (item.get("transformacion") or "").strip(),
-            "codigo": (item.get("codigo") or "").strip(),
-        }
-    return out
-
-
+# CORRECCIÓN: Se agrega sheet_name para coincidir con la llamada en main.py
 def leer_activos_xlsx(xlsx_path: Path, sheet_name: str = "DETALLADO") -> list[ActivoRow]:
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     if sheet_name not in wb.sheetnames:
         raise ValueError(f"No existe hoja '{sheet_name}' en {xlsx_path.name}")
     ws = wb[sheet_name]
-
-    rows: list[ActivoRow] = []
     
-    # Columnas según el nuevo archivo:
-    # B=2 NO DOC (Documento), E=5 DESCRIPCIÓN (Nombre servicio)
+    rows = []
     for r in range(2, ws.max_row + 1):
         doc = ws.cell(r, 2).value
         serv = ws.cell(r, 5).value
-
-        doc_s = (str(doc).strip() if doc is not None else "")
-        doc_n = norm_doc(doc_s)
-
-        serv_s = (str(serv).strip() if serv is not None else "")
-        serv_n = norm_servicio(serv_s)
-
-        if not doc_s and not serv_s:
-            continue  # fila vacía
-            
-        # El tipo_doc se inicializa vacío, se buscará en construir_plan_activos
-        rows.append(
-            ActivoRow(
-                rownum=r,
-                tipo_doc="", 
-                doc_raw=doc_s,
-                doc_norm=doc_n,
-                servicio_raw=serv_s,
-                servicio_norm=serv_n,
-            )
-        )
-
+        if doc or serv:
+            rows.append(ActivoRow(r, "", str(doc or "").strip(), norm_doc(doc), str(serv or "").strip(), norm_servicio(serv)))
     return rows
 
+def cargar_mapeo_activos(json_path: Path) -> dict:
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    return {norm_servicio(i["entrada"]): {"transformacion": (i.get("transformacion") or "").strip(), "codigo": (i.get("codigo") or "").strip()} for i in data if norm_servicio(i.get("entrada"))}
 
-def construir_plan_activos(excel, activos: list[ActivoRow], mapeo: dict, fecha: date):
-    """
-    excel: instancia ExcelCOM ya abierta.
-    Retorna: (plan: list[PlanRow], descartes: list[dict])
-    """
-    # 1) Index US (A tipo, B doc)
-    us_keys = excel.cargar_us_keyset()
-    
-    # NUEVO: Crear diccionario para deducir el "Tipo de Documento" a partir del "Número"
-    doc_to_tipo = {}
-    for key in us_keys:
-        partes = key.split("|")
-        if len(partes) == 2:
-            doc_to_tipo[partes[1]] = partes[0]
-
-    # 2) Base ESTRUCTURA (E doc -> L y M primera ocurrencia)
-    base_map = excel.cargar_estructura_base_lm()
-
-    # 3) Dedupe actual en ESTRUCTURA: (doc|codigo|fecha)
-    dupes = excel.cargar_estructura_dedupe_activos()
-
-    fecha_key = fecha.isoformat()
-
-    plan: list[PlanRow] = []
-    descartes: list[dict] = []
-
-    def reject(a: ActivoRow, reason: str, extra: str = ""):
-        descartes.append(
-            {
-                "row_excel": a.rownum,
-                "tipo_doc": a.tipo_doc,
-                "doc_norm": a.doc_norm,
-                "servicio": a.servicio_raw,
-                "reason": reason,
-                "extra": extra,
-            }
-        )
-
+def construir_plan_activos(excel, activos, mapeo, fecha):
+    doc_to_tipo = {k.split("|")[1]: k.split("|")[0] for k in excel.cargar_us_keyset() if "|" in k}
+    base_map, dupes = excel.cargar_estructura_base_lm(), excel.cargar_estructura_dedupe_activos()
+    plan, descartes = [], []
     for a in activos:
-        if not a.doc_norm:
-            reject(a, "DOC_VACIO")
-            continue
-        if not a.servicio_norm:
-            reject(a, "SERVICIO_VACIO")
-            continue
-
-        # Cruce y asignación automática del Tipo de Documento
-        tipo_encontrado = doc_to_tipo.get(a.doc_norm)
-        if not tipo_encontrado:
-            reject(a, "NO_EXISTE_EN_US")
-            continue
-            
-        a.tipo_doc = tipo_encontrado # Si existe, le asignamos el Tipo (Ej: 'CC')
-
+        tipo = doc_to_tipo.get(a.doc_norm)
         m = mapeo.get(a.servicio_norm)
-        if not m:
-            reject(a, "NO_MAPEO_EN_JSON", a.servicio_norm)
-            continue
-
-        nombre = (m.get("transformacion") or "").strip()
-        codigo = (m.get("codigo") or "").strip()
-
-        if not nombre:
-            reject(a, "SIN_NOMBRE_HOMOLOGADO")
-            continue
-
-        if nombre.strip().upper() == "QUITAR":
-            reject(a, "SERVICIO_EXCLUIDO")
-            continue
-
-        if not codigo:
-            reject(a, "SIN_CODIGO_HOMOLOGADO")
-            continue
-
         base = base_map.get(a.doc_norm)
-        if not base:
-            reject(a, "NO_BASE_ESTRUCTURA")
+        if not a.doc_norm or not a.servicio_norm: reason = "DOC_O_SERV_VACIO"
+        elif not tipo: reason = "NO_EXISTE_EN_US"
+        elif not m or m.get("transformacion") == "QUITAR": reason = "MAPEO_INVALIDO"
+        elif not base or not str(base["L"]).strip() or not str(base["M"]).strip(): reason = "SIN_BASE_LM"
+        elif f"{a.doc_norm}|{m['codigo']}|{fecha.isoformat()}" in dupes: reason = "DUPLICADO"
+        else:
+            plan.append(PlanRow(tipo, a.doc_norm, fecha, m["codigo"], m["transformacion"], str(base["L"]), str(base["M"]), base["row"], a.servicio_raw))
             continue
-
-        l_base = base.get("L", "")
-        m_base = base.get("M", "")
-        base_row = base.get("row", 0)
-
-        if (l_base is None or str(l_base).strip() == "") or (m_base is None or str(m_base).strip() == ""):
-            reject(a, "BASE_SIN_LM", f"L='{l_base}' M='{m_base}'")
-            continue
-
-        key_dupe = f"{a.doc_norm}|{codigo}|{fecha_key}"
-        if key_dupe in dupes:
-            reject(a, "DUPLICADO_EN_ESTRUCTURA", key_dupe)
-            continue
-
-        plan.append(
-            PlanRow(
-                tipo_doc=a.tipo_doc,
-                doc_norm=a.doc_norm,
-                fecha=fecha,
-                codigo=codigo,                    # H
-                nombre_homologado=nombre,          # K
-                l_base=str(l_base),
-                m_base=str(m_base),
-                base_row=int(base_row) if base_row else 0,
-                servicio_raw=a.servicio_raw,
-            )
-        )
-
+        descartes.append({"row_excel": a.rownum, "reason": reason, "servicio": a.servicio_raw})
     return plan, descartes
 
-
-def exportar_auditoria_csv(out_path: Path, plan: list[PlanRow], descartes: list[dict]):
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8-sig", newline="") as f:
+def exportar_auditoria_csv(path, plan, descartes):
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["TIPO", "tipo_doc", "doc", "fecha", "codigo", "nombre_homologado", "L", "M", "base_row", "servicio", "reason", "extra", "row_excel"])
-        for p in plan:
-            w.writerow(["OK", p.tipo_doc, p.doc_norm, p.fecha.isoformat(), p.codigo, p.nombre_homologado, p.l_base, p.m_base, p.base_row, p.servicio_raw, "", "", ""])
-        for d in descartes:
-            w.writerow(["NO", d.get("tipo_doc",""), d.get("doc_norm",""), "", "", "", "", "", "", d.get("servicio",""), d.get("reason",""), d.get("extra",""), d.get("row_excel","")])
-
-# -------------------------
-    # ESCRITURA: Activos en ESTRUCTURA (D..M)
-    # -------------------------
-    def pegar_activos_estructura(self, plan_rows, fila_inicio):
-        """
-        Inserta nuevas filas para Activos escribiendo D..M (10 columnas).
-        Mapeo:
-          D = tipo_doc
-          E = doc
-          F = fecha
-          H = codigo
-          K = nombre homologado
-          L = L_base
-          M = M_base
-        """
-        if not plan_rows:
-            return fila_inicio
-
-        data = []
-        for p in plan_rows:
-            row = [""] * 10  # D..M
-            row[0] = p.tipo_doc            # D
-            row[1] = p.doc_norm            # E
-            
-            # SOLUCIÓN: Convertir la fecha a texto (DD/MM/YYYY) para evitar el error de pywin32
-            row[2] = p.fecha.strftime("%d/%m/%Y")  # F
-            
-            row[4] = p.codigo              # H
-            row[7] = p.nombre_homologado   # K
-            row[8] = p.l_base              # L
-            row[9] = p.m_base              # M
-            data.append(row)
-
-        start = fila_inicio
-        end = fila_inicio + len(data) - 1
-
-        self.ws_estructura.Range(f"D{start}:M{end}").Value = data
-        return end + 1
+        w.writerow(["TIPO", "doc", "codigo", "L", "M", "servicio", "reason"])
+        for p in plan: w.writerow(["OK", p.doc_norm, p.codigo, p.l_base, p.m_base, p.servicio_raw, ""])
+        for d in descartes: w.writerow(["NO", "", "", "", "", d["servicio"], d["reason"]])

@@ -2,8 +2,6 @@
 venv/
 __pycache__/
 
-
-Codigo_V1/
 _work/
 zip/*.zip
 Activos/*.xlsx
