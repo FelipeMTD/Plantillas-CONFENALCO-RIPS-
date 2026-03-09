@@ -24,6 +24,41 @@ PLANTILLA = BASE_DIR / "RIPS_COMFE_PLANTILLA.xlsm"
 ACTIVOS_DIR = BASE_DIR / "Activos"
 ACTIVOS_JSON = ACTIVOS_DIR / "Activos.json"
 
+def formatear_fecha_rips(fecha_str):
+    """
+    Convierte obligatoriamente a 'AAAA-MM-DD HH:MM.
+    Si no tiene hora, asigna 00:00.
+    """
+    if not fecha_str: return ""
+    
+    s = str(fecha_str).strip()
+    partes = s.split(" ", 1)
+    fecha_parte = partes[0]
+    
+    # Extraer la hora o poner 00:00 por defecto
+    if len(partes) > 1:
+        hora_parte = partes[1].strip()
+        # Si trae segundos (ej 11:17:00), lo cortamos a 11:17
+        if len(hora_parte) >= 5 and ":" in hora_parte:
+            hora_parte = hora_parte[:5]
+    else:
+        hora_parte = "00:00"
+        
+    # Formatear la fecha a AAAA-MM-DD
+    if len(fecha_parte) == 8 and fecha_parte.isdigit():
+        fecha_f = f"{fecha_parte[:4]}-{fecha_parte[4:6]}-{fecha_parte[6:8]}"
+    else:
+        fecha_f = fecha_parte
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%m/%d/%Y"):
+            try:
+                fecha_f = datetime.strptime(fecha_parte, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                pass
+                
+    # Retornamos inyectando el apóstrofe mágico de Excel
+    return f"'{fecha_f} {hora_parte}"
+
 def iter_csv(path):
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
         r = csv.reader(f)
@@ -81,7 +116,7 @@ def procesar_activos(excel: ExcelCOM):
             print("⏳  Insertando en Excel...")
             fila_inicio = excel.siguiente_fila(excel.ws_estructura, 5)
             excel.pegar_activos_estructura(plan, fila_inicio)
-            print("✅  Inserción de activos completada (Se formateará al final).")
+            print("✅  Inserción de activos completada.")
         else:
             print("info  Operación cancelada.")
     else:
@@ -132,7 +167,11 @@ def main():
                         row_data = [""] * 8
                         for idx_csv, idx_list in mapa.items():
                             if idx_csv < len(r):
-                                row_data[idx_list] = r[idx_csv]
+                                valor = r[idx_csv]
+                                # Interceptamos la fecha para darle el formato correcto
+                                if idx_list == 1:
+                                    valor = formatear_fecha_rips(valor)
+                                row_data[idx_list] = valor
                         filas_est.append(row_data)
 
             if filas_est:
@@ -159,7 +198,7 @@ def main():
         procesar_activos(excel)
         
         # ========================================================
-        # 3. AJUSTES FINALES (FORMATO FECHA Y FÓRMULAS)
+        # 3. AJUSTE FINAL: ARRASTRAR FÓRMULAS
         # ========================================================
         ultima_fila_datos = excel.ultima_fila(excel.ws_estructura, 5) # Columna E determina el fin de los datos
         
@@ -167,9 +206,6 @@ def main():
             print("\n" + "="*50)
             print("⚙️  APLICANDO AJUSTES FINALES A ESTRUCTURA")
             print("="*50)
-            print(f"   📅  Aplicando formato de fecha final (AAAA-MM-DD)...")
-            excel.arreglar_formato_fechas_final("ESTRUCTURA", 3, ultima_fila_datos)
-            
             print(f"   🪄  Arrastrando fórmulas de la fila 2 hasta la {ultima_fila_datos}...")
             excel.arrastrar_formulas("ESTRUCTURA", 2, 3, ultima_fila_datos)
             print("   ✅  Ajustes finalizados con éxito.")
