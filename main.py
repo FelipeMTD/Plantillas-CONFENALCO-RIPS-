@@ -27,19 +27,15 @@ ACTIVOS_JSON = ACTIVOS_DIR / "Activos.json"
 def iter_csv(path):
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
         r = csv.reader(f)
-        try:
-            next(r, None) 
-        except StopIteration:
-            pass
+        try: next(r, None) 
+        except StopIteration: pass
         yield from r
 
 def extraer_zip(zip_path: Path) -> Path:
     destino = WORK_DIR / zip_path.stem
-    if destino.exists():
-        shutil.rmtree(destino)
+    if destino.exists(): shutil.rmtree(destino)
     destino.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path) as z:
-        z.extractall(destino)
+    with zipfile.ZipFile(zip_path) as z: z.extractall(destino)
     return destino
 
 def procesar_activos(excel: ExcelCOM):
@@ -84,16 +80,8 @@ def procesar_activos(excel: ExcelCOM):
         if resp == "SI":
             print("⏳  Insertando en Excel...")
             fila_inicio = excel.siguiente_fila(excel.ws_estructura, 5)
-            fila_fin = excel.pegar_activos_estructura(plan, fila_inicio) - 1
-            
-            print("magic 🪄  Arrastrando fórmulas...")
-            excel.arrastrar_formulas(
-                sheet_name="ESTRUCTURA",
-                fila_ref=fila_inicio - 1,
-                fila_inicio=fila_inicio,
-                fila_fin=fila_fin
-            )
-            print("✅  Inserción de activos completada.")
+            excel.pegar_activos_estructura(plan, fila_inicio)
+            print("✅  Inserción de activos completada (Se formateará al final).")
         else:
             print("info  Operación cancelada.")
     else:
@@ -121,6 +109,9 @@ def main():
         fila_us = excel.siguiente_fila(excel.ws_us, 2)
         print(f"📍  Punto de partida -> Estructura: Fila {fila_estructura} | US: Fila {fila_us}")
 
+        # ========================================================
+        # 1. PEGADO MASIVO DE RIPS (ZIPS)
+        # ========================================================
         for i, zip_file in enumerate(zips, 1):
             print(f"\n[{i}/{len(zips)}] 📂 Procesando ZIP: {zip_file.name}")
             carpeta = extraer_zip(zip_file)
@@ -146,12 +137,7 @@ def main():
 
             if filas_est:
                 print(f"    💾  Pegando {len(filas_est)} filas en ESTRUCTURA...")
-                fila_fin_est = excel.pegar_estructura_rango(filas_est, fila_estructura)
-                
-                print("    🪄  Arrastrando fórmulas ESTRUCTURA...")
-                excel.arrastrar_formulas("ESTRUCTURA", fila_estructura - 1, fila_estructura, fila_fin_est - 1)
-                
-                fila_estructura = fila_fin_est
+                fila_estructura = excel.pegar_estructura_rango(filas_est, fila_estructura)
             else:
                 print("    ⚠️  No hay datos de estructura en este ZIP.")
 
@@ -163,12 +149,30 @@ def main():
                 
                 if filas_us:
                     print(f"    👥  Procesando {len(filas_us)} usuarios...")
-                    fila_fin_us = excel.pegar_us_rango(filas_us, fila_us)
-                    fila_us = fila_fin_us
+                    fila_us = excel.pegar_us_rango(filas_us, fila_us)
             else:
                 print("    ⚠️  No hay archivo US.")
 
+        # ========================================================
+        # 2. PEGADO MASIVO DE ACTIVOS FIJOS
+        # ========================================================
         procesar_activos(excel)
+        
+        # ========================================================
+        # 3. AJUSTES FINALES (FORMATO FECHA Y FÓRMULAS)
+        # ========================================================
+        ultima_fila_datos = excel.ultima_fila(excel.ws_estructura, 5) # Columna E determina el fin de los datos
+        
+        if ultima_fila_datos >= 3:
+            print("\n" + "="*50)
+            print("⚙️  APLICANDO AJUSTES FINALES A ESTRUCTURA")
+            print("="*50)
+            print(f"   📅  Aplicando formato de fecha final (AAAA-MM-DD)...")
+            excel.arreglar_formato_fechas_final("ESTRUCTURA", 3, ultima_fila_datos)
+            
+            print(f"   🪄  Arrastrando fórmulas de la fila 2 hasta la {ultima_fila_datos}...")
+            excel.arrastrar_formulas("ESTRUCTURA", 2, 3, ultima_fila_datos)
+            print("   ✅  Ajustes finalizados con éxito.")
 
     except Exception as e:
         print(f"\n❌  ERROR CRÍTICO: {e}")
